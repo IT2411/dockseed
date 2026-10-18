@@ -22,7 +22,7 @@ from dockseed.models import (
     PackageManager,
     ProjectModel,
 )
-from dockseed.validators import validate_dockerfile
+from dockseed.validators import run_build_validation, validate_dockerfile
 from dockseed.writer import write_project_files
 
 
@@ -246,7 +246,6 @@ def _handle_init(args: argparse.Namespace) -> int:
 
     model = scan_project(args.path, overrides=overrides)
 
-    # Check overwrite policy early before prompting if not a dry-run
     dockerfile_path = model.root / "Dockerfile"
     if not args.dry_run and not args.overwrite and dockerfile_path.exists():
         raise OverwriteBlockedError(
@@ -261,7 +260,6 @@ def _handle_init(args: argparse.Namespace) -> int:
     df_res = generate_dockerfile(model, include_comments=args.comments)
     di_res = generate_dockerignore(model)
 
-    # Validate generated files statically before writing
     val_report = validate_dockerfile(df_res.content, model, di_res.content)
     if not val_report.is_valid:
         err_msg = "\n  - ".join(val_report.errors)
@@ -326,6 +324,12 @@ def _handle_check(args: argparse.Namespace) -> int:
         raise ValidationError("Dockerfile validation failed.")
 
     print("Static Dockerfile validation passed.")
+
+    if args.build:
+        print("Running container image build validation...")
+        run_build_validation(model.root, runtime=args.runtime)
+        print("Container image build validation passed.")
+
     return int(ExitCode.SUCCESS)
 
 

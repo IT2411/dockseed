@@ -1,10 +1,17 @@
-"""Static consistency and security validator for Dockerfile and .dockerignore."""
+"""Static consistency and opt-in build validator for Dockerfile and .dockerignore."""
 
 import json
 import re
+import shutil
+import subprocess
+import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 
+from dockseed.exceptions import ValidationError
 from dockseed.models import ProjectModel
+
+SUPPORTED_RUNTIMES: tuple[str, ...] = ("docker", "podman", "nerdctl")
 
 
 @dataclass
@@ -62,7 +69,6 @@ def validate_dockerfile(
 
         if keyword == "FROM":
             has_from = True
-            # Check base image version alignment if python:<ver> is used
             match = re.search(r"python:(\d+\.\d+)", arg)
             if (
                 match
@@ -82,7 +88,6 @@ def validate_dockerfile(
                 has_non_root_user = True
 
         elif keyword == "COPY":
-            # Strip flags like --from=... or --chown=...
             tokens = [t for t in arg.split() if not t.startswith("--")]
             has_from_flag = any(t.startswith("--from=") for t in arg.split())
             if not has_from_flag and len(tokens) >= 2:
@@ -126,7 +131,6 @@ def validate_dockerfile(
             "Dockerfile does not switch to a non-root USER before running the application."
         )
 
-    # Validate .dockerignore if provided
     if dockerignore_content is not None:
         ignore_lines = {
             line.strip()
@@ -140,10 +144,65 @@ def validate_dockerfile(
                 ".dockerignore does not exclude local virtual environments ('.venv/')."
             )
 
-        # Ensure README.md is not excluded if referenced by pyproject.toml
         if (model.root / "pyproject.toml").is_file() and "README.md" in ignore_lines:
             report.errors.append(
                 ".dockerignore excludes 'README.md', which may break pyproject.toml package builds."
             )
 
     return report
+
+
+def resolve_container_runtime(preferred: str | None = None) -> str:
+    """Resolve an available container runtime executable on PATH."""
+    if preferred:
+        if preferred not in SUPPORTED_RUNTIMES:
+            raise ValidationError(
+                f"Unsupported container runtime '{preferred}'. "
+                f"Supported: {', '.join(SUPPORTED_RUNTIMES)}"
+            )
+        found = shutil.which(preferred)
+        if not found:
+            raise ValidationError(
+                f"Requested container runtime '{preferred}' was not found on PATH."
+            )
+        return found
+
+    for candidate in SUPPORTED_RUNTIMES:
+        found = shutil.which(candidate)
+        if found:
+            return found
+
+    raise ValidationError(
+        "No supported container CLI (docker, podman, nerdctl) found on PATH. "
+        "Install Docker or Podman to use 'dockseed check --build'."
+    )
+
+
+def run_build_validation(project_root: Path, runtime: str | None = None) -> None:
+    """Invoke container CLI build safely (shell=False) and clean up temporary image."""
+    exe = resolve_container_runtime(runtime)
+    tag = f"dockseed-check-{uuid.uuid4().hex[:12]}"
+
+    build_cmd = [exe, "build", "-t", tag, str(project_root)]
+    result = subprocess.run(
+        build_cmd,
+        capture_output=True,
+        text=True,
+        shell=False,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        err_detail = (result.stderr or result.stdout).strip()
+        raise ValidationError(
+            f"Container image build failed using '{Path(exe).name}':\n{err_detail}"
+        )
+
+    # Best-effort cleanup of the temporary validation image
+    subprocess.run(
+        [exe, "rmi", "-f", tag],
+        capture_output=True,
+        text=True,
+        shell=False,
+        check=False,
+    )

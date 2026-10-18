@@ -12,6 +12,7 @@ from dockseed.detectors import (
     detect_python_version,
     scan_python_sources,
 )
+from dockseed.environment import inspect_environment
 from dockseed.models import CLIOverrides, ProjectModel
 from dockseed.scanner import discover_project
 
@@ -39,6 +40,9 @@ def scan_project(
     ast_infos = scan_python_sources(ctx)
     detect_framework(ctx, model, ast_infos)
     detect_entrypoint(ctx, model, ast_infos, overrides)
+
+    # Stage 5: Optional local virtual-environment cross-check
+    inspect_environment(model)
 
     # Merge any scanner warnings
     for w in ctx.warnings:
