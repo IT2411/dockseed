@@ -6,6 +6,7 @@ from dockseed.exceptions import (
     OverwriteBlockedError,
     ValidationError,
 )
+from dockseed.inference import format_scan_report, scan_project
 from dockseed.models import (
     CLIOverrides,
     ConfidenceLevel,
@@ -35,4 +36,6 @@ __all__ = [
     "PackageManager",
     "ProjectModel",
     "ValidationError",
+    "format_scan_report",
+    "scan_project",
 ]

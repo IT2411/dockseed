@@ -7,6 +7,7 @@ from pathlib import Path
 
 from dockseed import __version__
 from dockseed.exceptions import DockseedError, ExitCode
+from dockseed.inference import format_scan_report, scan_project
 from dockseed.models import PackageManager
 
 
@@ -141,7 +142,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return int(ExitCode.SUCCESS)
 
     try:
-        # Subcommand handlers will be wired in Phases 1-4
+        if args.command == "scan":
+            model = scan_project(args.path)
+            print(format_scan_report(model, output_format=args.output_format))
+            return int(ExitCode.SUCCESS)
+
+        # init and check handlers will be wired in Phases 3-4
         print(f"dockseed {args.command}: command skeleton initialized.")
         return int(ExitCode.SUCCESS)
     except DockseedError as exc:
