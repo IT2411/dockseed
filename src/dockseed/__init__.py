@@ -6,6 +6,7 @@ from dockseed.exceptions import (
     OverwriteBlockedError,
     ValidationError,
 )
+from dockseed.generators import generate_dockerfile, generate_dockerignore
 from dockseed.inference import format_scan_report, scan_project
 from dockseed.models import (
     CLIOverrides,
@@ -18,6 +19,7 @@ from dockseed.models import (
     PackageManager,
     ProjectModel,
 )
+from dockseed.validators import ValidationReport, validate_dockerfile
 
 __version__ = "0.1.0"
 
@@ -36,6 +38,10 @@ __all__ = [
     "PackageManager",
     "ProjectModel",
     "ValidationError",
+    "ValidationReport",
     "format_scan_report",
+    "generate_dockerfile",
+    "generate_dockerignore",
     "scan_project",
+    "validate_dockerfile",
 ]
