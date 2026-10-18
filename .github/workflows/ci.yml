@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  quality-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies via Poetry
+        run: |
+          poetry env use ${{ matrix.python-version }}
+          poetry install --no-interaction
+
+      - name: Run Ruff linter and format check
+        run: |
+          poetry run ruff check src/ tests/
+          poetry run ruff format --check src/ tests/
+
+      - name: Run strict Mypy type checking
+        run: |
+          poetry run mypy --strict src/ tests/
+
+      - name: Run Pytest unit test suite with coverage
+        run: |
+          poetry run pytest -m "not integration" --cov=dockseed --cov-report=term-missing --cov-fail-under=90
+
+      - name: Verify Poetry package build
+        if: matrix.python-version == '3.11'
+        run: |
+          poetry check
+          poetry build
