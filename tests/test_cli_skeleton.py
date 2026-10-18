@@ -1,7 +1,8 @@
-"""Phase 0 tests for the CLI argument parser and entry point skeleton."""
+"""Tests for the CLI argument parser, help output, and module entry point."""
 
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -25,26 +26,31 @@ def test_cli_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert __version__ in captured.out
 
 
-def test_cli_subcommands_parse_correctly(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["scan", ".", "--format", "json"]) == int(ExitCode.SUCCESS)
+def test_cli_subcommands_end_to_end_smoke(tmp_path: Path) -> None:
+    (tmp_path / "requirements.txt").write_text("fastapi\nuvicorn\n", encoding="utf-8")
+    (tmp_path / "main.py").write_text(
+        "from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8"
+    )
+
+    assert main(["scan", str(tmp_path), "--format", "json"]) == int(ExitCode.SUCCESS)
     assert main(
         [
             "init",
-            "--dry-run",
+            "--path",
+            str(tmp_path),
             "--yes",
-            "--overwrite",
             "--no-comments",
             "--python",
             "3.12",
             "--package-manager",
-            "uv",
+            "pip",
             "--entrypoint",
-            "app.main:app",
+            "main:app",
             "--port",
             "8000",
         ]
     ) == int(ExitCode.SUCCESS)
-    assert main(["check", "--build", "--runtime", "podman"]) == int(ExitCode.SUCCESS)
+    assert main(["check", str(tmp_path)]) == int(ExitCode.SUCCESS)
 
 
 def test_main_module_execution() -> None:
